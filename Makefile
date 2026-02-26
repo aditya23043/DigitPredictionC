@@ -3,3 +3,6 @@ build: src/main.c
 
 run: bin/main
 	./bin/main
+
+check: bin/main
+	valgrind --leak-check=full --show-leak-kinds=all ./bin/main

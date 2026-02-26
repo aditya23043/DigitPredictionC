@@ -25,9 +25,12 @@
 typedef uint8_t u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
+typedef u8 Image[28][28];
+typedef u8 Label;
 
-#define MNIST_train_image "./src/MNIST/train-images.idx3-ubyte"
 #define PRINT_BYTE(c) printf("0x%02x\n", c);
+
+// Check if the number of bytes read is less than a certain amount
 #define CHECK(n, num)                                                          \
     if (n < num)                                                               \
     perror("Corrupted data")
@@ -39,13 +42,17 @@ u32 be_to_le(u32 num)
             ((num << 8) & 0x00ff0000) | ((num << 24) & 0xff000000));
 }
 
-void load_img()
+/* u8 (*load_img())[28][28] */
+
+// Loads all image bytes into a malloc'd Image array.
+// Needs to be free'd in the main program
+Image* load_img(char* dataset_filename)
 {
-    int train_img_fp = open(MNIST_train_image, O_RDONLY);
-    if (train_img_fp == -1)
+    int img_fp = open(dataset_filename, O_RDONLY);
+    if (img_fp == -1)
     {
-        perror("File open");
-        return;
+        perror("Image File open");
+        return NULL;
     }
 
     u32 c;
@@ -53,14 +60,14 @@ void load_img()
     int num_samples = 0;
 
     // check header bytes
-    n = read(train_img_fp, &c, 4);
+    n = read(img_fp, &c, 4);
     CHECK(n, 4);
     if (be_to_le(c) != 0x00000803) // unsigned bits, 3 dimensional
     {
-        printf("Wrong magic number!\n");
-        return;
+		printf("Wrong magic number OR number of dimensions!\n");
+        return NULL;
     }
-    n = read(train_img_fp, &c, 4);
+    n = read(img_fp, &c, 4);
     CHECK(n, 4);
     if (be_to_le(c) == 0x0000ea60) // 60000 (train data)
     {
@@ -72,39 +79,81 @@ void load_img()
     }
     else
     {
-        printf("Number of samples < 60000!\n");
-        return;
+        printf("Number of samples < 60000 / 10000!\n");
+        return NULL;
     }
-    n = read(train_img_fp, &c, 4);
+    n = read(img_fp, &c, 4);
     CHECK(n, 4);
     if (be_to_le(c) != 0x0000001c) // 28
     {
         printf("Image dimension < 28! (1)\n");
-        return;
+        return NULL;
     }
-    n = read(train_img_fp, &c, 4);
+    n = read(img_fp, &c, 4);
     CHECK(n, 4);
     if (be_to_le(c) != 0x0000001c) // 28
     {
         printf("Image dimension < 28! (2)\n");
-        return;
+        return NULL;
     }
 
-    u8(*image)[28][28] = malloc(num_samples * 28 * 28);
-    for (int i = 0; i < num_samples; i++)
-    {
-        for (int j = 0; j < 28; j++)
-        {
-            for (int k = 0; k < 28; k++)
-            {
-                n = read(train_img_fp, image, 60000 * 28 * 28);
-                /* printf("0x%02x, ", image[i][j][k]); */
-            }
-        }
-    }
+    /* printf("# samples = %d\n", num_samples); */
 
-    write_bmp("img.bmp", image[59999]);
+    /* u8(*image)[28][28] = malloc(num_samples * 28 * 28); */
+    Image* images = malloc(num_samples * 28 * 28);
+    n = read(img_fp, images, num_samples * 28 * 28);
 
-    free(image);
-    close(train_img_fp);
+    /* write_bmp("img.bmp", image[59999]); */
+
+    /* free(image); */
+
+    close(img_fp);
+
+    return images;
+}
+
+// Loads all label bytes into a malloc'd Label array.
+// Needs to be free'd in the main program
+Label* load_label(char* dataset_filename)
+{
+	int label_fp = open(dataset_filename, O_RDONLY);	
+	if(label_fp == -1)
+	{
+		perror("Label File Open");
+		return NULL;
+	}
+
+	u32 c;
+	int n;
+	int num_samples = 0;
+
+	n = read(label_fp, &c, 4);
+	CHECK(n, 4);
+	if(be_to_le(c) != 0x00000801) // unsigned bits, 1 dimension
+	{
+		printf("Wrong magic number OR number of dimensions!\n");
+		return NULL;
+	}
+	n = read(label_fp, &c, 4);
+	CHECK(n, 4);
+	if(be_to_le(c) == 0x0000ea60) // 60000
+	{
+		num_samples = 60000;
+	} 
+	else if(be_to_le(c) == 0x00002710) // 10000
+	{
+		num_samples = 10000;
+	}
+	else
+	{
+        printf("Number of samples < 60000 / 10000!\n");
+        return NULL;
+	}
+
+	Label* labels = malloc(num_samples);
+	n = read(label_fp, labels, num_samples);
+
+	close(label_fp);
+
+	return labels;
 }
